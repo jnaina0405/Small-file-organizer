@@ -1,0 +1,73 @@
+#include <iostream>
+#include <filesystem>
+#include <map>
+#include <vector>
+#include <algorithm>
+#include <fstream>
+#include <chrono>
+
+namespace fs = std::filesystem;
+using namespace std;
+
+void logAction(const string& message) {
+    ofstream log("log.txt", ios::app);
+    auto now = chrono::system_clock::to_time_t(chrono::system_clock::now());
+    log << ctime(&now) << " - " << message << endl;
+}
+
+int main() {
+    string path;
+    cout << "Enter directory path to organize: ";
+    getline(cin, path);
+
+    map<string, vector<string>> categories = {
+        {"Images", {".jpg", ".jpeg", ".png"}},
+        {"Documents", {".pdf", ".txt", ".docx"}},
+        {"Videos", {".mp4", ".mkv"}},
+        {"Music", {".mp3", ".wav"}}
+    };
+
+    int totalFiles = 0;
+
+    try {
+        for (const auto& entry : fs::directory_iterator(path)) {
+            if (!entry.is_regular_file()) continue;
+
+            totalFiles++;
+            string ext = entry.path().extension().string();
+            transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+            bool moved = false;
+
+            for (const auto& [folder, extensions] : categories) {
+                if (find(extensions.begin(), extensions.end(), ext) != extensions.end()) {
+
+                    fs::path targetDir = fs::path(path) / folder;
+                    fs::create_directories(targetDir);
+
+                    fs::path targetFile = targetDir / entry.path().filename();
+                    fs::rename(entry.path(), targetFile);
+
+                    logAction("Moved " + entry.path().filename().string() + " to " + folder);
+                    moved = true;
+                    break;
+                }
+            }
+
+            if (!moved) {
+                fs::path unknownDir = fs::path(path) / "Others";
+                fs::create_directories(unknownDir);
+                fs::rename(entry.path(), unknownDir / entry.path().filename());
+                logAction("Moved " + entry.path().filename().string() + " to Others");
+            }
+        }
+
+        cout << "\nOrganization complete.\n";
+        cout << "Total files processed: " << totalFiles << endl;
+    }
+    catch (const exception& e) {
+        cout << "Error: " << e.what() << endl;
+    }
+
+    return 0;
+}
